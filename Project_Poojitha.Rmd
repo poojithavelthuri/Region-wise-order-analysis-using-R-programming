@@ -1,0 +1,632 @@
+---
+Title: BIS581 mid exam
+Output: Word_notebook
+Student's Name: Poojitha Velthuri
+Date: 7/16/2024
+output: word_document
+---
+Getting the file path and loading the datasets with respective of their path mentioned.
+```{r}
+## please add your first name below
+##Student First Name: Poojitha
+  
+library(tidyr)
+library(tidyverse)
+library(readxl)
+
+# loading the file path to the respective objects created
+Orders_Central_path <- "C:/Users/pooja/Documents/581/Orders_Central.csv"
+Orders_west_path <- "C:/Users/pooja/Documents/581/Orders_West.csv"
+Orders_East_path <- "C:/Users/pooja/Documents/581/Orders_East.txt"
+
+#loading the data from csv
+
+centralData <- read.csv(Orders_Central_path, header=TRUE)
+westData <- read.csv(Orders_west_path, header=TRUE)
+eastData <- read.delim(Orders_East_path, header=TRUE, sep='\t')
+
+
+```
+
+Viewing the loaded data 
+```{r}
+View(centralData)
+View(westData)
+View(eastData)
+```
+
+** Data wrangling and data cleaning **
+
+- First combining the ship date, year,day ,month as single column for better understanding
+```{r}
+library(dplyr)
+
+centralData <- centralData %>% unite(Ship.Date,
+                                     Ship.Year,
+                                     Ship.Month,
+                                     Ship.Day,
+                                     sep = "-")
+```
+
+- Changing the date format as it helps to plot graph easily
+```{r}
+centralData <- centralData %>%
+  mutate(Ship.Date = as.Date(Ship.Date, format = "%Y-%m-%d"))
+```
+
+-Same combing the Order date into one column and changing the format
+```{r}
+centralData <- centralData %>% unite(Order.Date,
+                                      Order.Year,
+                                      Order.Month,
+                                      Order.Day,
+                                      sep = "-") %>%
+            mutate(Order.Date = as.Date(Order.Date, format = "%Y-%m-%d"))
+```
+
+* Handling the negative values *
+- Replacing the negative value with mean of profit
+
+```{r}
+mean_profit <- mean(centralData$Profit[centralData$Profit >= 0], na.rm = TRUE)
+
+
+centralData$Profit[centralData$Profit < 0] <- mean_profit
+```
+
+* Converting the  format of the ship.date *
+- It is  in format of "Y-M-D H:M:S" so converting it into "Y-M-D" making sure for all data sets the format is same.
+```{r}
+library(lubridate)
+westData$Ship.Date <- as.POSIXct(westData$Ship.Date, format = "%Y-%m-%d %H:%M:%S",
+                                                     tz = "UTC")
+
+# Format Ship Date to "%Y-%m-%d"
+westData$Ship.Date <- format(westData$Ship.Date, "%Y-%m-%d")
+
+westData$Order.Date <- as.POSIXct(westData$Order.Date, format = "%Y-%m-%d %H:%M:%S",
+                                                     tz = "UTC")
+westData$Order.Date <- format(westData$Order.Date, "%Y-%m-%d")
+
+westData$Right_Ship.Date <- as.POSIXct(westData$Right_Ship.Date, format = "%Y-%m-%d %H:%M:%S",
+                                                     tz = "UTC")
+
+westData$Right_Ship.Date <- format(westData$Right_Ship.Date, "%Y-%m-%d")
+
+westData$Right_Order.Date <- as.POSIXct(westData$Right_Order.Date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+westData$Right_Order.Date <- format(westData$Right_Order.Date, "%Y-%m-%d")
+
+
+
+```
+-Here we are compare ship.date column with Right_ship.date and get the count of them as we have we know if both columns are same we can delete Right_Ship.Date column which helps to clean the data.
+```{r}
+# Compare Ship_Date and Right_Ship_Date columns
+different_dates <- westData[westData$Ship_Date != westData$Right_Ship_Date, ]
+
+# Count rows with different dates
+different_dates_count <- nrow(different_dates)
+
+# Print the count
+print(different_dates_count)
+
+```
+-As we can see the count is "0" which both column has same value so we can delete the unwanted column
+
+- Similarly we are comparing all the columns which Prefix as Right with the original ones according to that we can delete the unnecessary data. 
+```{r}
+# List of columns to compare (without Right_ prefix)
+columns_to_compare <- c("Row.ID", "Order.Date", "Ship.Date", "Ship.Mode", 
+                        "Customer.ID", "Customer.Name", "Segment", "Country", 
+                        "City", "Postal.Code", "Region", "Product.ID", 
+                        "Category", "Sub.Category", "Product.Name", "Sales", 
+                        "Quantity", "Discount", "Profit")
+
+# Initialize a vector to store counts
+different_counts <- numeric(length(columns_to_compare))
+
+# Loop through each column and compare
+for (col_name in columns_to_compare) {
+  
+    # Construct column names with and without Right_ prefix
+    col_name_right <- paste0("Right_", col_name)
+    different_rows <- westData[westData[[col_name_right]] != westData[[col_name]], ]
+    different_counts[col_name] <- nrow(different_rows)
+    
+    # Print the count for each pair
+    cat("Count of differences in", col_name, "and", col_name_right, ":", different_counts[col_name], "\n")
+}
+
+
+cat("\nTotal differences across columns are :\n")
+cat(sum(different_counts), "differences found in total.\n")
+
+```
+-So by considering the output we can delete the unwanted data later we will handle the different valued columns
+
+-Deleting the columns using within and rm
+
+```{r}
+westData <- within(westData, rm(Right_Order.Date,
+                                Right_Ship.Date,
+                                Right_Ship.Mode,
+                                Right_Customer.ID,
+                                Right_Customer.Name,
+                                Right_Segment,
+                                Right_Postal.Code,
+                                Right_Region,
+                                Right_Country,
+                                Right_City))
+```
+
+-Now the no.of columns have been reduced to 31 from 41 columns.
+
+-As the state has shortform of state names and we need to convert that to fullform to compare with Right_state2
+
+-so we are using state.abb to save the abbreviation and replacing them.
+```{r}
+Full_name <- match(westData$State, state.abb)
+westData$State <- state.name[Full_name]
+```
+
+-After converting comparing them and getting count of difference observed.
+
+```{r}
+different_states <- westData[westData$State != westData$Right_State2, ]
+different_states_count <- nrow(different_states)
+print(different_states_count)
+```
+-The difference between states and right_states is 0 so we can delete the right_state2 column.
+
+- Deleting the Right_State2 column
+
+```{r}
+westData <- within(westData, rm(Right_State2))
+```
+
+- Ship.Date was an extra column so have to delete the additional column
+```{r}
+#centralData <- within(centralData, rm(Ship.Date))
+#westData <- within(westData, rm(Region))
+#eastData <- within(eastData, rm(Region))
+```
+
+- To work with different data sets we need to make sure that the column names should be similar.
+
+- So change the column names according while compared with others central data doesn't have proper column name.
+
+```{r}
+colnames(centralData)[colnames(centralData) == "Product"] <- "Product.Name"
+
+```
+* Converting the  format of the ship.date and order.date *
+- Similarly to the westData , eastData has same format
+- It is  in format of "Y-M-D H:M:S" so converting it into "Y-M-D" making sure for all data sets the format is same.
+```{r}
+
+eastData$Order.Date <- as.POSIXct(eastData$Order.Date, format = "%m/%d/%Y %H:%M", tz = "UTC")
+eastData$Order.Date <- format(eastData$Order.Date, "%Y-%m-%d")
+
+
+eastData$Ship.Date <- as.POSIXct(eastData$Ship.Date, format = "%m/%d/%Y %H:%M", tz = "UTC")
+eastData$Ship.Date <- format(eastData$Ship.Date, "%Y-%m-%d")
+```
+
+* Handling negative value in EastData *
+ Replacing the negative value with mean of profit
+```{r}
+mean_profit <- mean(eastData$Profit[eastData$Profit >= 0], na.rm = TRUE)
+
+
+eastData$Profit[eastData$Profit < 0] <- mean_profit
+```
+
+-As we have observed the difference between few columns .Assume Right_ columns data to be correct columns and deleting the other column
+
+- After renaming the column smiliar to the other data sets column names
+
+
+```{r}
+westData <- within(westData , rm(Row.ID,
+                                 Product.ID,
+                                 Category,
+                                 Sub.Category,
+                                 Product.Name,
+                                 Sales,
+                                 Discount,
+                                 Profit,
+                                 Quantity))
+
+
+colnames(westData)[colnames(westData) %in% c("Right_Row.ID",                                                                            "Right_Product.ID",
+                                                   "Right_Category",
+                                                   "Right_Sub.Category",
+                                                   "Right_Product.Name",
+                                                   "Right_Sales",
+                                                   "Right_Quantity",
+                                                   "Right_Discount",                                                                            "Right_Profit")] <-  c("Row.ID",
+                                                                            "Product.ID",                                                                              "Category",                                                                               "Sub.Category",                                                                            "Product.Name",                                                                             "Sales",                                                                                  "Quantity",                                                                                 "Discounts",                                                                                 "Profit")
+```
+
+* Handling negative value in westData *
+- Replacing the negative value with mean of profit
+
+```{r}
+mean_profit <- mean(westData$Profit[westData$Profit >= 0], na.rm = TRUE)
+westData$Profit[westData$Profit < 0] <- mean_profit
+```
+
+* Handling the missing values*
+- Counting the missing values
+```{r}
+sum(is.na(westData))
+sum(is.na(centralData))
+sum(is.na(eastData))
+```
+- As we saw east data has the missing data , after view the data we got to know it has all empty rows
+
+- So using na.omit , deleting all the na values rows
+```{r}
+eastData<-eastData %>%
+               na.omit()
+View(eastData)
+```
+
+- When observed the data carefully central data doesn't have region column listed ,so adding the region column to the data as other also have the region column listed.
+
+- By doing this it would be help full for us to perform analysis when data is combined
+```{r}
+centralData$Region <- "Central"
+```
+
+- Here we are changing the datatype of few columns .Make sure all the datasets have same datatype columns 
+
+
+- Changing the column names if any difference is observed.
+```{r}
+colnames(eastData)[colnames(eastData) == "Discount"] <- "Discounts"
+```
+
+
+```{r}
+
+westData$Discounts <- as.character(westData$Discounts)
+eastData$Discounts <- as.character(eastData$Discounts)
+
+#The east data Sales column is in USD so changing it to numeric
+eastData$Sales <- gsub("USD", "", eastData$Sales)
+eastData$Sales <- as.numeric(eastData$Sales)
+
+```
+
+-Using str checking the data type of the columns
+
+```{r}
+#str(westData)
+#str(centralData)
+#str(eastData)
+
+```
+- Checking the column names of all the three data sets by listing them
+
+```{r}
+colnames(centralData)
+colnames(westData)
+colnames(eastData)
+```
+
+
+
+- To combine the data all the column should be in similar order sorting the colnames using sort function.
+```{r}
+
+library(dplyr)
+sorted_colnames <- sort(colnames(centralData))
+
+# Reorder columns in each data set using dplyr
+centralData <- centralData %>%
+  select(sorted_colnames)
+
+westData <- westData %>%
+  select(sorted_colnames)
+
+eastData <- eastData %>%
+  select(sorted_colnames)
+
+```
+
+1. Which region, on average, ships products faster?
+```{r}
+#1.Answer
+##Student Last Name: Velthuri
+#Converting the order date and ship date as date which helps for calculations
+centralData$Order.Date <- as.Date(centralData$Order.Date)
+centralData$Ship.Date <- as.Date(centralData$Ship.Date)
+
+# Calculate shipping time (in days) 
+#Subtracting ship date with order date through which we can get the product shipping time in days
+centralData$Shipping.Time <- as.numeric(centralData$Ship.Date - centralData$Order.Date)
+
+# calculating for westData
+westData$Order.Date <- as.Date(westData$Order.Date)
+westData$Ship.Date <- as.Date(westData$Ship.Date)
+westData$Shipping.Time <- as.numeric(westData$Ship.Date - westData$Order.Date)
+
+# Calculating for eastData
+eastData$Order.Date <- as.Date(eastData$Order.Date)
+eastData$Ship.Date <- as.Date(eastData$Ship.Date)
+eastData$Shipping.Time <- as.numeric(eastData$Ship.Date - eastData$Order.Date)
+
+```
+- Here, we store the shipping time in days as a separate column in each data set.
+- We then calculate the mean shipping time for each data set and store the results in    respective objects.
+- Using the min function, we retrieve the minimum value and display it alongside the region."
+```{r}
+##Student Last Name: Velthuri
+#Calculating Shipping Time Average for 3 region data set 
+centralData_Average_shipping.Time <- mean(centralData$Shipping.Time, na.rm = TRUE)
+westData_Average_shipping.Time <- mean(westData$Shipping.Time, na.rm = TRUE)
+eastData_Average_shipping.Time <- mean(eastData$Shipping.Time, na.rm = TRUE)
+
+output <- paste("The Average Shipping Time in days according to the dataset are:",
+                "\n",
+                "centralData : ", centralData_Average_shipping.Time, " days\n",
+                "westData : ", westData_Average_shipping.Time, " days\n",
+                "eastData : ", eastData_Average_shipping.Time, " days\n")
+
+# Print the output
+#cat(output)
+
+Average_Shipping_Time <- c(
+  central = centralData_Average_shipping.Time,
+  west = westData_Average_shipping.Time,
+  east = eastData_Average_shipping.Time
+)
+
+
+Faster_shipping <- min(Average_Shipping_Time)
+
+cat("Region with faster shipping time :", names(Average_Shipping_Time)[which.min(Average_Shipping_Time)], " - ", Faster_shipping, " days\n")
+
+```
+
+
+2. Which products ship slowest by region? Please display the top 9 if you have multiple products meeting the criteria. 
+
+```{r}
+#2.Answer
+##Student Whole Name: Poojitha Velthuri
+
+library(dplyr)
+#Combining the datasets using bind_rows , we can use rbind as well and storing as combinedData
+combinedData <- bind_rows(centralData, westData, eastData)
+
+#Using the group and summarise getting the details of top 9 slowest shipping products with the help of shipping time
+top_slowest <- combinedData %>%
+  group_by(Product.Name, Region) %>%
+  summarise(AvgShippingTime = mean(Shipping.Time)) %>%
+  arrange(Region, desc(AvgShippingTime)) %>%
+  group_by(Region) %>%
+  top_n(3, AvgShippingTime) %>% 
+#Here we gave 3 because we are group data by region so based on the we will be getting output from all the three regions
+#After that we are arranging the data in descending order with respective of avgshippingtime.
+  ungroup() %>%
+  arrange(Region, desc(AvgShippingTime)) %>%
+  slice_head(n = 9)
+#using the slice _head which gives the top 9 entries of data and displaying it using print
+
+# Print the top 9 slowest shipping products by region
+print(top_slowest)
+
+
+```
+
+3. Plot time to ship by category, by year.
+```{r}
+#3.Answer
+##Student Fist Name: Poojitha
+
+#here i have plotted 3 different graphs 
+#1.Using average shipping time and ploting the graph
+#2. Using the ship time by year and category ploting box plot
+#3. Using few aesthetics and modifying the 2 graph
+
+library(ggplot2)
+#To plot the graph by year we are storing the year from ship date into the object as converting them into factor for better ploting
+combinedData$Ship.Year <- format(combinedData$Ship.Date, "%Y")
+combinedData$Ship.Year <- factor(combinedData$Ship.Year)
+combinedData$Category <- factor(combinedData$Category)
+
+# Line plot - using average of shipping time
+mean_data <- aggregate(Shipping.Time ~ Ship.Year + Category, data = combinedData, FUN = mean)
+#I am ploting the graph using average of shipping time
+
+ggplot(mean_data, aes(x = Ship.Year, y = Shipping.Time, color = Category, group = Category)) +
+  geom_line(size = 1) +  
+  geom_point(size = 3, alpha = 0.8) + 
+  labs(x = "Year", y = "Average Shipping Time in days", 
+       title = "Average Shipping Time by Year and Category") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+#Theme helps as to visualize the parameters properly , like this will rotate the axis in mentioned angle
+
+#Box Plot
+ggplot(combinedData, aes(x = Ship.Year, y = Shipping.Time, color = Category, group = Category)) +
+  geom_boxplot() +
+  labs(x = "Year", y = "Shipping Time in days", title = "Shipping Time by Category over Years") + 
+  theme_minimal()
+
+
+# Extract year from Ship.Date and add it as a new column
+combinedData$Ship.Year <- format(combinedData$Ship.Date, "%Y")
+
+# Create the box plot using ggplot2 for more customization
+ggplot(combinedData, aes(x = Ship.Year, y = Shipping.Time, fill = Category)) +
+  geom_boxplot(outlier.size = 1, outlier.colour = "blue") + 
+  labs(x = "Year", y = "Shipping Time in days", 
+       title = "Shipping Time by Category over Years") +
+  theme_minimal() +  
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  
+
+
+```
+Below I have plotted graph for single data sets as well like for central , west and east .I have plotted different graphs to see the insights for different regions
+
+```{r}
+#3.Answer (Considering Central Data)
+# Graph for central data only
+##Student first Name: Poojitha
+
+# here am using the average of shipping time and ploting 
+centralData$Ship.Year <- format(centralData$Ship.Date, "%Y")
+
+library(ggplot2)
+mean <- aggregate(Shipping.Time ~ Ship.Year + Category, data = centralData, FUN = mean)
+
+# Convert Ship.Year and Category to factors for better plotting order
+mean$Ship.Year <- factor(mean$Ship.Year)
+mean$Category <- factor(mean$Category)
+
+# Plot as a line graph
+ggplot(mean, aes(x = Ship.Year, y = Shipping.Time, color = Category, group = Category)) +
+  geom_line(size = 1) +
+  geom_point(size = 3, alpha = 0.8) +
+  labs(x = "Year", y = "Average Shipping Time in days", 
+       title = "Average Shipping Time by Year and Category for Central Region") +
+  scale_color_brewer(palette = "Set1") +  # Set color palette (adjust as needed)
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),  
+        # Rotate x-axis labels for better readability
+        legend.position = "right")
+ 
+```
+```{r}
+#3.Answer (Considering West Data)
+# Graph for west data only
+##Student First Name: Poojitha
+
+# Where as for this data am not using average shipping time , just ploting using the ship time with year and category
+westData$Ship.Year <- format(westData$Ship.Date, "%Y")
+
+ggplot(westData, aes(x = Ship.Year, y = Shipping.Time, color = Category, group = Category)) +
+  geom_line(size = 1, alpha = 0.7) +
+  labs(x = "Year", y = "Shipping Time in days", title = "Shipping Time by Year and Category for west region") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 40, hjust = 1)) 
+
+```
+```{r}
+#3.Answer (Considering East Data)
+##Student First Name: Poojitha
+# Graph for East data only
+
+# Where as for this data am not using average shipping time , just ploting using the ship time with year and category
+eastData$Ship.Year <- format(eastData$Ship.Date, "%Y")
+
+ggplot(eastData, aes(x = Ship.Year, y = Shipping.Time, color = Category, group = Category)) +
+  geom_line(size = 1, alpha = 0.7) +
+  labs(x = "Year", y = "Shipping Time in days", title = "Shipping Time by Year and Category for east region") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 40, hjust = 1)) 
+```
+
+4. Which categories have highest profit by region, chain-wide?
+```{r}
+#4.Answer
+##Student Last Name: Velthuri
+# To find the highest profit be region , am using group by to calculate sum of profit and then arrange it in descending order after that displaying the total profit
+library(dplyr)
+profit<- combinedData %>%
+  group_by(Region, Category) %>%
+  summarise(Total_Profit = sum(Profit)) %>%
+  arrange(desc(Total_Profit))
+
+# View the results
+print(profit)
+```
+5. Which segments have the lowest profit by region?
+
+```{r}
+#5.Answer
+##Student Whole Name: Poojitha Velthuri
+# In similar way to the 4th question we will no calculate the profit which is grouped by region and segment and arranged, by default it will be arranged as lowest to highest.
+library(dplyr)
+profit_summary <- combinedData %>%
+  group_by(Region, Segment) %>%
+  summarise(Total_Profit = sum(Profit)) %>%
+  arrange(Total_Profit)
+
+# View the results
+print(profit_summary)
+```
+6. What are yearly sales by region?
+```{r}
+#6.Answer
+##Student First Name: Poojitha
+#To calculate the yearly sales by region using group and summarise which calculates the sales based on the give group
+# Calculate yearly sales by region
+yearly_sales <- combinedData %>%
+  group_by(Region, Ship.Year) %>%
+  summarise(Total_Sales = sum(Sales)) %>%
+  arrange(Region, Ship.Year)
+#Here the output is displayed for regions yearly based sales.
+print(yearly_sales)
+```
+To get better understanding I have plotted bar graph for the respective scenario
+
+```{r}
+# Plotting graph to get better insights of sales according to the year with respective of region.
+##Student First Name: Poojitha
+library(ggplot2)
+
+ggplot(yearly_sales, aes(x = factor(Ship.Year), y = Total_Sales, fill = Region)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+  labs(
+    title = "Yearly Sales by Region",
+    x = "Year",
+    y = "Total Sales",
+    fill = "Region"
+  ) +
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) +
+  theme_minimal()
+```
+7. Which customer purchased the most (by dollar amount, in a single order) store-wide and by region and what did they buy?
+```{r}
+
+# To find the customer who purchased the most ,I have used filter and mentioned max sales which gives the details of customers who had purchased the most. this based on store wide.
+# Using slice(1) gives top one customer as output.
+
+library(dplyr)
+##Student Last Name: Velthuri
+# Store-wide: Find the customer with the maximum sales amount in a single order
+max_customer_storewide <- combinedData %>%
+  filter(Sales == max(Sales)) %>%
+  slice(1)  
+
+# As the sales were asked in USD so converting sales into USD using paste0 and format
+max_customer_storewide$Sales <- paste0("$", format(max_customer_storewide$Sales, big.mark = ",", decimal.mark = ".", scientific = FALSE))
+
+cat("Store-wide:\n")
+print(max_customer_storewide[, c("Customer.ID", "Customer.Name", "Sales","Product.Name")])
+
+
+
+```
+```{r}
+##Student Last Name: Velthuri
+#In order to get the details of customer by region here am using arrange which sets data by region and sales
+# By Region: Find the customer with the maximum sales amount in each region
+max_customer_by_region <- combinedData %>%
+  group_by(Region) %>%
+  filter(Sales == max(Sales)) %>%
+  arrange(Region, desc(Sales)) %>%
+  slice(1)
+
+
+cat("\nBy Region:\n")
+print(max_customer_by_region[, c("Customer.Name", "Region", "Sales","Product.Name")])
+
+
+```
+
+
